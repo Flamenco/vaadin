@@ -345,7 +345,12 @@ public class SQLContainer implements Container, Container.Filterable,
                     /* Generate itemId for the row based on primary key(s) */
                     Object[] itemId = new Object[pKeys.size()];
                     for (int i = 0; i < pKeys.size(); i++) {
-                        itemId[i] = rs.getObject(pKeys.get(i));
+                        Object id1 = rs.getObject(pKeys.get(i));
+                        if (id1 instanceof Integer && propertyTypes
+                                .get(pKeys.get(i)) == Long.class) {
+                            id1 = new Long((Integer) id1);
+                        }
+                        itemId[i] = id1;
                     }
                     id = new RowId(itemId);
                 }
@@ -1310,7 +1315,12 @@ public class SQLContainer implements Container, Container.Filterable,
                 /* Generate row itemId based on primary key(s) */
                 Object[] itemId = new Object[pKeys.size()];
                 for (int i = 0; i < pKeys.size(); i++) {
-                    itemId[i] = rs.getObject(pKeys.get(i));
+                    Object id1 = rs.getObject(pKeys.get(i));
+                    if (id1 instanceof Integer
+                            && propertyTypes.get(pKeys.get(i)) == Long.class) {
+                        id1 = new Long((Integer) id1);
+                    }
+                    itemId[i] = id1;
                 }
                 RowId id = null;
                 if (pKeys.isEmpty()) {

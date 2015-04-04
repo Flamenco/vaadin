@@ -22,6 +22,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EventObject;
@@ -64,6 +65,10 @@ public class TableQuery extends AbstractTransactionalQuery implements
      * Primary key column name(s) in the table.
      */
     private List<String> primaryKeyColumns;
+    /**
+     * Column types (as SqlType)
+     */
+    private final Map<String, Integer> columnTypes = new HashMap<String, Integer>();
     /**
      * Version column name in the table.
      */
@@ -604,6 +609,7 @@ public class TableQuery extends AbstractTransactionalQuery implements
         Connection connection = null;
         ResultSet rs = null;
         ResultSet tables = null;
+        columnTypes.clear();
         try {
             connection = getConnection();
             DatabaseMetaData dbmd = connection.getMetaData();
@@ -637,6 +643,15 @@ public class TableQuery extends AbstractTransactionalQuery implements
                 rs.close();
                 if (!names.isEmpty()) {
                     primaryKeyColumns = names;
+                    beginTransaction();
+                    rs = getResults(0, 1);
+                    ResultSetMetaData rsmd = rs.getMetaData();
+                    for (int i = 1; i <= rsmd.getColumnCount(); i++) {
+                        columnTypes.put(rsmd.getColumnName(i),
+                                rsmd.getColumnType(i));
+                    }
+                    rs.close();
+                    rollback();
                 }
                 if (primaryKeyColumns == null || primaryKeyColumns.isEmpty()) {
                     throw new IllegalArgumentException(
@@ -680,7 +695,21 @@ public class TableQuery extends AbstractTransactionalQuery implements
             int colCount = rsmd.getColumnCount();
             if (genKeys.next()) {
                 for (int i = 1; i <= colCount; i++) {
-                    values.put(rsmd.getColumnName(i), genKeys.getObject(i));
+                    Object objValue = genKeys.getObject(i);
+                    // If the key type is an Integer, the metadata may be
+                    // returned as a Long
+                    if (columnTypes.get(primaryKeyColumns.get(i - 1)) == Types.INTEGER) {
+                        if (objValue instanceof Long) {
+                            Long l = (Long) objValue;
+                            if (l < Integer.MIN_VALUE || l > Integer.MAX_VALUE) {
+                                System.err.println("A primary key's value was outside the declared type's value.");
+                               // throw new IllegalArgumentException(l + " cannot be cast to int without changing its value.");
+                            }else{
+                                objValue = (int) (long) l;                                
+                            }
+                        }
+                    }
+                    values.put(rsmd.getColumnName(i), objValue);
                 }
             }
             /* Generate new RowId */
