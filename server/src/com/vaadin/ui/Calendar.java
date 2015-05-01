@@ -221,6 +221,16 @@ public class Calendar extends AbstractComponent implements
     private CalendarServerRpcImpl rpc = new CalendarServerRpcImpl();
 
     /**
+     * 
+     */
+    private Integer minTimeInMinutes;
+
+    /**
+     * 
+     */
+    private Integer maxTimeInMinutes;
+
+    /**
      * Returns the logger for the calendar
      */
     protected Logger getLogger() {
@@ -442,7 +452,7 @@ public class Calendar extends AbstractComponent implements
 
         currentCalendar.setTime(firstDateToShow);
         events = getEventProvider().getEvents(firstDateToShow, lastDateToShow);
-
+        cacheMinMaxTimeOfDay(events);
         List<CalendarState.Event> calendarStateEvents = new ArrayList<CalendarState.Event>();
         if (events != null) {
             for (int i = 0; i < events.size(); i++) {
@@ -463,6 +473,54 @@ public class Calendar extends AbstractComponent implements
             }
         }
         getState().events = calendarStateEvents;
+    }
+
+    /**
+     * Stores the minimum and maximum time-of-day in minutes for the events.
+     * 
+     * @param events
+     *            A list of calendar events. Can be NULL.
+     */
+    private void cacheMinMaxTimeOfDay(List<CalendarEvent> events) {
+        minTimeInMinutes = null;
+        maxTimeInMinutes = null;
+        if (events != null) {
+            for (CalendarEvent event : events) {
+                java.util.Calendar calStart = java.util.Calendar.getInstance();
+                calStart.setTime(event.getStart());
+                int minuteOfDayStart = calStart
+                        .get(java.util.Calendar.HOUR_OF_DAY) * 60
+                        + calStart.get(java.util.Calendar.MINUTE);
+                java.util.Calendar calEnd = java.util.Calendar.getInstance();
+                calEnd.setTime(event.getEnd());
+                int minuteOfDayEnd = calEnd.get(java.util.Calendar.HOUR_OF_DAY)
+                        * 60 + calEnd.get(java.util.Calendar.MINUTE);
+                if (minTimeInMinutes == null) {
+                    minTimeInMinutes = minuteOfDayStart;
+                    maxTimeInMinutes = minuteOfDayEnd;
+                } else {
+                    if (minuteOfDayStart < minTimeInMinutes) {
+                        minTimeInMinutes = minuteOfDayStart;
+                    }
+                    if (minuteOfDayEnd > maxTimeInMinutes) {
+                        maxTimeInMinutes = minuteOfDayEnd;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Sets the start and end time to fit all current events that were retrieved
+     * from the last call to getEvents(). If no events exist, no change will be
+     * made
+     */
+    public void setFirstAndLastVisibleHourToFit() {
+        if (minTimeInMinutes != null) {
+            setFirstVisibleHourOfDay(minTimeInMinutes / 60);
+            // Do not show the final hour if last minute ends on it
+            setLastVisibleHourOfDay((maxTimeInMinutes - 1) / 60);
+        }
     }
 
     private void setupDaysAndActions() {
@@ -1599,7 +1657,9 @@ public class Calendar extends AbstractComponent implements
      */
     @Override
     public List<CalendarEvent> getEvents(Date startDate, Date endDate) {
-        return getEventProvider().getEvents(startDate, endDate);
+        List<CalendarEvent> events = getEventProvider().getEvents(startDate, endDate);
+        cacheMinMaxTimeOfDay(events);
+        return events;
     }
 
     /*
